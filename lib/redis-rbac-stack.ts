@@ -1,11 +1,21 @@
 import cdk = require('@aws-cdk/core');
 import ec2 = require('@aws-cdk/aws-ec2');
+import iam = require('@aws-cdk/aws-iam');
 import elasticache = require('@aws-cdk/aws-elasticache')
 import { setFlagsFromString } from 'v8';
+
 
 export class RedisRbacStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    const redis_admin = new iam.User(this, "RedisAdmin", {
+      userName: 'RedisAdmin',
+    });
+
+    const redis_readers = new iam.Group(this, "RedisReaders", {
+      groupName: 'RedisReaders'
+    });
 
     const vpc = new ec2.Vpc(this, "Vpc", {
       subnetConfiguration: [
@@ -22,7 +32,6 @@ export class RedisRbacStack extends cdk.Stack {
       ]
     });
 
-    //TODO
     const ecSecurityGroup = new ec2.SecurityGroup(this, 'ElastiCacheSG', {
       vpc: vpc,
       description: 'SecurityGroup associated with the ElastiCache Redis Cluster'
@@ -32,7 +41,6 @@ export class RedisRbacStack extends cdk.Stack {
 
     let privateSubnets: string[] = []
     vpc.privateSubnets.forEach(function(value){
-      console.log(value.subnetId)
       privateSubnets.push(value.subnetId)
     });
 
@@ -42,17 +50,17 @@ export class RedisRbacStack extends cdk.Stack {
       cacheSubnetGroupName: 'RedisSubnetGroup'
     });
 
-    console.log("subnet group:"+ecSubnetGroup.cacheSubnetGroupName)
-    console.log("sg id"+ecSecurityGroup.securityGroupId)
-    // const ecCluster;
     const ecCluster = new elasticache.CfnCacheCluster(this, 'RedisCluster', {
       clusterName: 'RedisCluster-RBAC-Demo',
       cacheNodeType: 'cache.m4.large',
+      engineVersion: '6.x',
       numCacheNodes: 1,
       engine: "Redis",
       cacheSubnetGroupName: ecSubnetGroup.cacheSubnetGroupName,
       vpcSecurityGroupIds: [ecSecurityGroup.securityGroupId]
     });
+
+    ecCluster.node.addDependency(ecSubnetGroup)
 
   }
 }
