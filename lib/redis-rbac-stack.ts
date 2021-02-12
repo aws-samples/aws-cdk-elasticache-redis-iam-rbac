@@ -100,6 +100,7 @@ export class RedisRbacStack extends cdk.Stack {
     });
 
 
+    // Create a lambda layer for redis python library
     const redis_py_layer = new lambda.LayerVersion(this, 'redispy_Layer', {
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/lib/redis_module/redis_py.zip')),
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_8, lambda.Runtime.PYTHON_3_7, lambda.Runtime.PYTHON_3_6],
@@ -107,6 +108,7 @@ export class RedisRbacStack extends cdk.Stack {
       license: 'MIT License'
     });
 
+    // Create a role for the Lambda
     const mock_app_role = new iam.Role(this, 'MockApplication-Role', {
       roleName: 'MockApplicationLambdaRole',
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
