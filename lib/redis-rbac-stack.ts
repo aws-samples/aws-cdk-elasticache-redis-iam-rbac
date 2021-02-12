@@ -3,7 +3,8 @@ import ec2 = require('@aws-cdk/aws-ec2');
 import iam = require('@aws-cdk/aws-iam');
 import elasticache = require('@aws-cdk/aws-elasticache');
 import lambda = require('@aws-cdk/aws-lambda');
-import path = require('path')
+import path = require('path');
+import secretsmanager = require('@aws-cdk/aws-secretsmanager')
 import { setFlagsFromString } from 'v8';
 
 
@@ -89,6 +90,16 @@ export class RedisRbacStack extends cdk.Stack {
     //------------------------------
     // Configure Mock Application
     //------------------------------
+
+    // SecretsManager -- create password for mock app
+    const mock_app_redis_secret = new secretsmanager.Secret(this, 'MockAppRedisSecret', {
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: 'user' }),
+        generateStringKey: 'password',
+      },
+    });
+
+
     const redis_py_layer = new lambda.LayerVersion(this, 'redispy_Layer', {
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/lib/redis_module/redis_py.zip')),
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_8, lambda.Runtime.PYTHON_3_7, lambda.Runtime.PYTHON_3_6],
@@ -116,7 +127,8 @@ export class RedisRbacStack extends cdk.Stack {
       securityGroups: [ecSecurityGroup],
       environment: {
         redis_endpoint: ecCluster.attrRedisEndpointAddress,
-        redis_port: ecCluster.attrRedisEndpointPort
+        redis_port: ecCluster.attrRedisEndpointPort,
+        secret_arn: mock_app_redis_secret.secretArn
       }
     });
 
@@ -124,8 +136,11 @@ export class RedisRbacStack extends cdk.Stack {
     mock_app.node.addDependency(ecCluster);
     mock_app.node.addDependency(vpc);
     mock_app.node.addDependency(mock_app_role);
+    mock_app.node.addDependency(mock_app_redis_secret);
 
+    mock_app_redis_secret.grantRead(mock_app);
   }
 
-  // SecretsManager -- create passwords for users
+
+
 }
