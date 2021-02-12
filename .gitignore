@@ -6,3 +6,8 @@ node_modules
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+lib/lambda/lib/redis_module
+.DS_Store
+dump.rdb
+lib/lambda/mock_app.zip
