@@ -1,0 +1,6 @@
+aws elasticache create-user \
+ --user-id "mock_application_user" \
+ --user-name "mock_app_user" \
+ --engine "REDIS" \
+ --passwords "a-str0ng-pa))word" \
+ --access-string "off +get ~keys*"

@@ -75,17 +75,23 @@ export class RedisRbacStack extends cdk.Stack {
       cacheSubnetGroupName: 'RedisSubnetGroup'
     });
 
-    const ecCluster = new elasticache.CfnCacheCluster(this, 'RedisCluster', {
-      clusterName: 'RedisCluster-RBAC-Demo',
+    const ecClusterReplicationGroup = new elasticache.CfnReplicationGroup(this, 'RedisReplicationGroup', {
+      replicationGroupDescription: 'RedisReplicationGroup-RBAC-Demo',
+      replicationGroupId: 'RedisReplicationGroup',
+      atRestEncryptionEnabled: true,
+      multiAzEnabled: true,
       cacheNodeType: 'cache.m4.large',
-      engineVersion: '6.x',
-      numCacheNodes: 1,
-      engine: "Redis",
       cacheSubnetGroupName: ecSubnetGroup.cacheSubnetGroupName,
-      vpcSecurityGroupIds: [ecSecurityGroup.securityGroupId]
-    });
+      engine: "Redis",
+      engineVersion: '6.x',
+      numNodeGroups: 1,
+      replicasPerNodeGroup: 1,
+      securityGroupIds: [ecSecurityGroup.securityGroupId],
+      transitEncryptionEnabled: true,
 
-    ecCluster.node.addDependency(ecSubnetGroup)
+    })
+
+    ecClusterReplicationGroup.node.addDependency(ecSubnetGroup)
 
     //------------------------------
     // Configure Mock Application
@@ -94,8 +100,9 @@ export class RedisRbacStack extends cdk.Stack {
     // SecretsManager -- create password for mock app
     const mock_app_redis_secret = new secretsmanager.Secret(this, 'MockAppRedisSecret', {
       generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'user' }),
+        secretStringTemplate: JSON.stringify({ username: 'mock-app-user' }),
         generateStringKey: 'password',
+        excludeCharacters: ',"/@'
       },
     });
 
@@ -128,21 +135,19 @@ export class RedisRbacStack extends cdk.Stack {
       vpcSubnets: {subnetType: ec2.SubnetType.PRIVATE},
       securityGroups: [ecSecurityGroup],
       environment: {
-        redis_endpoint: ecCluster.attrRedisEndpointAddress,
-        redis_port: ecCluster.attrRedisEndpointPort,
+        redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
+        redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
         secret_arn: mock_app_redis_secret.secretArn
       }
     });
 
     mock_app.node.addDependency(redis_py_layer);
-    mock_app.node.addDependency(ecCluster);
+    mock_app.node.addDependency(ecClusterReplicationGroup);
     mock_app.node.addDependency(vpc);
     mock_app.node.addDependency(mock_app_role);
     mock_app.node.addDependency(mock_app_redis_secret);
 
     mock_app_redis_secret.grantRead(mock_app);
   }
-
-
 
 }
