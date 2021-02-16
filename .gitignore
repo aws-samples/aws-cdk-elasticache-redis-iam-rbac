@@ -10,4 +10,5 @@ cdk.out
 lib/lambda/lib/redis_module
 .DS_Store
 dump.rdb
-lib/lambda/mock_app.zip
+mock_app.zip
+rbac_cr.zip

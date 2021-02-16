@@ -5,7 +5,12 @@ import elasticache = require('@aws-cdk/aws-elasticache');
 import lambda = require('@aws-cdk/aws-lambda');
 import path = require('path');
 import secretsmanager = require('@aws-cdk/aws-secretsmanager')
+import { RedisRbacUser } from  "./redis-rbac-custom-resource"
+
+import fs = require('fs');
+
 import { setFlagsFromString } from 'v8';
+
 
 
 export class RedisRbacStack extends cdk.Stack {
@@ -93,6 +98,7 @@ export class RedisRbacStack extends cdk.Stack {
 
     ecClusterReplicationGroup.node.addDependency(ecSubnetGroup)
 
+
     //------------------------------
     // Configure Mock Application
     //------------------------------
@@ -128,7 +134,7 @@ export class RedisRbacStack extends cdk.Stack {
     const mock_app = new lambda.Function(this, 'MockApplication', {
       runtime: lambda.Runtime.PYTHON_3_7,
       handler: 'redis_connect.lambda_handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/mock_app.zip')),
+      code: new lambda.InlineCode(fs.readFileSync(path.join(__dirname, 'lambda/redis_connect.py'), { encoding: 'utf-8' })),
       layers: [redis_py_layer],
       role: mock_app_role,
       vpc: vpc,
@@ -148,6 +154,22 @@ export class RedisRbacStack extends cdk.Stack {
     mock_app.node.addDependency(mock_app_redis_secret);
 
     mock_app_redis_secret.grantRead(mock_app);
+
+    // Order of execution:
+    // 1) Create an AWS IAM user, role or group which will access the redis cluster
+    // 2) Create an AWS SecretsManager secret which will be the auto generated secret string
+    //    a) input parameters: redis-username, group
+    // 3) Create custom resource to create a Redis RBAC user/group using username, password from step 2
+    //    a) input parameters: redis-username, user-group name, cluster-name
+    //    b) custom resource will access secret for redis-username and create RBAC user and assign to user-group and cluster
+    const rbacCs = new RedisRbacUser(this, "User1", {
+      vpc: vpc,
+      elastiCacheSecurityGroups: [ecSecurityGroup],
+      elastiCacheReplicationGroup: ecClusterReplicationGroup,
+      redisUserName: 'test-user-1',
+      redisGroupName: 'user-group-001'
+    });
+
   }
 
 }
