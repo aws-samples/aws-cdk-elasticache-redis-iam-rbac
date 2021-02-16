@@ -143,16 +143,6 @@ export class RedisRbacStack extends cdk.Stack {
     // Configure Mock Application
     //------------------------------
 
-    // SecretsManager -- create password for mock app
-    const mock_app_redis_secret = new secretsmanager.Secret(this, 'MockAppRedisSecret', {
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'mock-app-user' }),
-        generateStringKey: 'password',
-        excludeCharacters: ',"/@'
-      },
-    });
-
-
     // Create a lambda layer for redis python library
     const redis_py_layer = new lambda.LayerVersion(this, 'redispy_Layer', {
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/lib/redis_module/redis_py.zip')),
@@ -170,6 +160,7 @@ export class RedisRbacStack extends cdk.Stack {
 
     mock_app_role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
     mock_app_role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+    userOne.getSecret().grantRead(mock_app_role)
 
     const mock_app = new lambda.Function(this, 'MockApplication', {
       runtime: lambda.Runtime.PYTHON_3_7,
@@ -191,11 +182,6 @@ export class RedisRbacStack extends cdk.Stack {
     mock_app.node.addDependency(ecClusterReplicationGroup);
     mock_app.node.addDependency(vpc);
     mock_app.node.addDependency(mock_app_role);
-    mock_app.node.addDependency(mock_app_redis_secret);
-
-    mock_app_redis_secret.grantRead(mock_app);
-    userOne.getSecret().grantRead(mock_app_role)
-
 
 
   }

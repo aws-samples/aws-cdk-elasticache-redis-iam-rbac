@@ -47,7 +47,7 @@ export class RedisRbacUser extends cdk.Construct {
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: props.redisUserName }),
         generateStringKey: 'password',
-        excludeCharacters: ',"/@'
+        excludeCharacters: '@%*()_+=`~{}|[]\\:";\'?,./'
       },
     });
 
