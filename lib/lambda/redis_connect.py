@@ -1,6 +1,7 @@
 import redis
 import os
 import boto3
+import json
 
 def lambda_handler(event, context):
     client = boto3.client('secretsmanager')
@@ -9,10 +10,13 @@ def lambda_handler(event, context):
     )
 
     print("The secret is: "+response['SecretString'])
+    secret = json.loads(response['SecretString'])
 
     redis_server = redis.Redis(
         host=os.environ['redis_endpoint'],
         port=os.environ['redis_port'],
+        username=secret['username'],
+        password=secret['password'],
         ssl=True)
 
     redis_server.set("name", "orkb")

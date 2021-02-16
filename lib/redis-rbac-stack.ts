@@ -99,6 +99,35 @@ export class RedisRbacStack extends cdk.Stack {
     ecClusterReplicationGroup.node.addDependency(ecSubnetGroup)
 
 
+
+    //------------------------------
+    // Create a RedisRBACUser
+    //------------------------------
+    // Order of execution:
+    // 1) Create an AWS IAM user, role or group which will access the redis cluster
+    // 2) Create an AWS SecretsManager secret which will be the auto generated secret string
+    //    a) input parameters: redis-username, group
+    // 3) Create custom resource to create a Redis RBAC user/group using username, password from step 2
+    //    a) input parameters: redis-username, user-group name, cluster-name
+    //    b) custom resource will access secret for redis-username and create RBAC user and assign to user-group and cluster
+    const userOne = new RedisRbacUser(this, "testuser1", {
+      vpc: vpc,
+      elastiCacheSecurityGroups: [ecSecurityGroup],
+      elastiCacheReplicationGroup: ecClusterReplicationGroup,
+      redisUserName: 'userone',
+      redisUserId: 'userone',
+      redisGroupName: 'groupone'
+    });
+
+    const userOneSecret = userOne.getSecret()
+
+    const userGroupOne = new elasticache.CfnUserGroup(this, 'userGroup1', {
+      engine: 'redis',
+      userGroupId: 'userGroup1',
+      userIds: [userOne.getUserId()]
+    })
+
+
     //------------------------------
     // Configure Mock Application
     //------------------------------
@@ -143,7 +172,7 @@ export class RedisRbacStack extends cdk.Stack {
       environment: {
         redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
         redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
-        secret_arn: mock_app_redis_secret.secretArn
+        secret_arn: userOneSecret.secretArn
       }
     });
 
@@ -154,22 +183,9 @@ export class RedisRbacStack extends cdk.Stack {
     mock_app.node.addDependency(mock_app_redis_secret);
 
     mock_app_redis_secret.grantRead(mock_app);
+    userOneSecret.grantRead(mock_app_role)
 
-    // Order of execution:
-    // 1) Create an AWS IAM user, role or group which will access the redis cluster
-    // 2) Create an AWS SecretsManager secret which will be the auto generated secret string
-    //    a) input parameters: redis-username, group
-    // 3) Create custom resource to create a Redis RBAC user/group using username, password from step 2
-    //    a) input parameters: redis-username, user-group name, cluster-name
-    //    b) custom resource will access secret for redis-username and create RBAC user and assign to user-group and cluster
-    const userOne = new RedisRbacUser(this, "testuser1", {
-      vpc: vpc,
-      elastiCacheSecurityGroups: [ecSecurityGroup],
-      elastiCacheReplicationGroup: ecClusterReplicationGroup,
-      redisUserName: 'userone',
-      redisUserId: 'userone',
-      redisGroupName: 'groupone'
-    });
+
 
   }
 
