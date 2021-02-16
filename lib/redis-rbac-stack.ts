@@ -12,8 +12,8 @@ import fs = require('fs');
 import { setFlagsFromString } from 'v8';
 
 
-
 export class RedisRbacStack extends cdk.Stack {
+
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -83,7 +83,8 @@ export class RedisRbacStack extends cdk.Stack {
     //    b) custom resource will access secret for redis-username and create RBAC user and assign to user-group and cluster
     const userOne = new RedisRbacUser(this, "testuser1", {
       redisUserName: 'userone',
-      redisUserId: 'userone'
+      redisUserId: 'userone',
+      accessString: 'on ~* +@all'
     });
 
     const userTwo = new RedisRbacUser(this, "userTwo", {
@@ -174,7 +175,7 @@ export class RedisRbacStack extends cdk.Stack {
       environment: {
         redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
         redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
-        secret_arn: userOne.getSecret().secretArn
+        secret_arn: userOne.getSecret().secretArn,
       }
     });
 
