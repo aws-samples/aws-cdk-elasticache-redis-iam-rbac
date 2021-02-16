@@ -6,6 +6,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "zip": "./build_zips.sh",
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk"
