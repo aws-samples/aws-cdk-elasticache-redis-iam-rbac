@@ -152,6 +152,7 @@ export class RedisRbacStack extends cdk.Stack {
       license: 'MIT License'
     });
 
+
     // Create a role for the Lambda
     const mock_app_role = new iam.Role(this, 'MockApplication-Role', {
       roleName: 'MockApplicationLambdaRole',
@@ -184,6 +185,40 @@ export class RedisRbacStack extends cdk.Stack {
     mock_app.node.addDependency(vpc);
     mock_app.node.addDependency(mock_app_role);
 
+    //--------------------
+    // Create a function that has a role that cannot access the secret
+    //--------------------
+
+    // Create a role for the Lambda
+    const applicationTwoRole = new iam.Role(this, 'applicationTwoRole', {
+      roleName: 'applicationTwoRole',
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Role to be assumed by mock application lambda',
+    });
+
+    applicationTwoRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+    applicationTwoRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+
+    const applicationTwo = new lambda.Function(this, 'applicationTwo', {
+      runtime: lambda.Runtime.PYTHON_3_7,
+      handler: 'redis_connect.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/mock_app.zip')),
+      layers: [redis_py_layer],
+      role: applicationTwoRole,
+      vpc: vpc,
+      vpcSubnets: {subnetType: ec2.SubnetType.PRIVATE},
+      securityGroups: [ecSecurityGroup],
+      environment: {
+        redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
+        redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
+        secret_arn: userOne.getSecret().secretArn,
+      }
+    });
+
+    applicationTwo.node.addDependency(redis_py_layer);
+    applicationTwo.node.addDependency(ecClusterReplicationGroup);
+    applicationTwo.node.addDependency(vpc);
+    applicationTwo.node.addDependency(applicationTwoRole);
 
   }
 
