@@ -72,6 +72,47 @@ export class RedisRbacStack extends cdk.Stack {
     });
 
     //------------------------------
+    // Create a RedisRBACUser
+    //------------------------------
+    // Order of execution:
+    // 1) Create an AWS IAM user, role or group which will access the redis cluster
+    // 2) Create an AWS SecretsManager secret which will be the auto generated secret string
+    //    a) input parameters: redis-username, group
+    // 3) Create custom resource to create a Redis RBAC user/group using username, password from step 2
+    //    a) input parameters: redis-username, user-group name, cluster-name
+    //    b) custom resource will access secret for redis-username and create RBAC user and assign to user-group and cluster
+    const userOne = new RedisRbacUser(this, "testuser1", {
+      redisUserName: 'userone',
+      redisUserId: 'userone'
+    });
+
+    const userTwo = new RedisRbacUser(this, "userTwo", {
+      redisUserName: 'usertwo',
+      redisUserId: 'user2'
+    });
+
+    const readOnlyUser = new RedisRbacUser(this, "readOnlyUser", {
+      redisUserName: 'reader',
+      redisUserId: 'readonly'
+    });
+
+    const mockAppDefaultUser = new RedisRbacUser(this, "mockAppDefaultUser", {
+      redisUserName: 'default',
+      redisUserId: 'mock-app-default-user'
+    });
+
+    const mockAppUserGroup = new elasticache.CfnUserGroup(this, 'mockAppUserGroup', {
+      engine: 'redis',
+      userGroupId: 'mock-app-user-group',
+      userIds: [userOne.getUserId(), userTwo.getUserId(), mockAppDefaultUser.getUserId(), readOnlyUser.getUserId()]
+    })
+
+    mockAppUserGroup.node.addDependency(userOne);
+    mockAppUserGroup.node.addDependency(userTwo);
+    mockAppUserGroup.node.addDependency(mockAppDefaultUser);
+    mockAppUserGroup.node.addDependency(readOnlyUser);
+
+    //------------------------------
     // Configure ElastiCache Redis Cluster
     //------------------------------
     const ecSubnetGroup = new elasticache.CfnSubnetGroup(this, 'ElastiCacheSubnetGroup', {
@@ -93,41 +134,11 @@ export class RedisRbacStack extends cdk.Stack {
       replicasPerNodeGroup: 1,
       securityGroupIds: [ecSecurityGroup.securityGroupId],
       transitEncryptionEnabled: true,
-
+      userGroupIds: [mockAppUserGroup.userGroupId]
     })
 
     ecClusterReplicationGroup.node.addDependency(ecSubnetGroup)
-
-
-
-    //------------------------------
-    // Create a RedisRBACUser
-    //------------------------------
-    // Order of execution:
-    // 1) Create an AWS IAM user, role or group which will access the redis cluster
-    // 2) Create an AWS SecretsManager secret which will be the auto generated secret string
-    //    a) input parameters: redis-username, group
-    // 3) Create custom resource to create a Redis RBAC user/group using username, password from step 2
-    //    a) input parameters: redis-username, user-group name, cluster-name
-    //    b) custom resource will access secret for redis-username and create RBAC user and assign to user-group and cluster
-    const userOne = new RedisRbacUser(this, "testuser1", {
-      vpc: vpc,
-      elastiCacheSecurityGroups: [ecSecurityGroup],
-      elastiCacheReplicationGroup: ecClusterReplicationGroup,
-      redisUserName: 'userone',
-      redisUserId: 'userone',
-      redisGroupName: 'groupone'
-    });
-
-    const userOneSecret = userOne.getSecret()
-
-    const userGroupOne = new elasticache.CfnUserGroup(this, 'userGroup1', {
-      engine: 'redis',
-      userGroupId: 'userGroup1',
-      userIds: [userOne.getUserId()]
-    })
-
-
+    ecClusterReplicationGroup.node.addDependency(mockAppUserGroup)
     //------------------------------
     // Configure Mock Application
     //------------------------------
@@ -163,7 +174,7 @@ export class RedisRbacStack extends cdk.Stack {
     const mock_app = new lambda.Function(this, 'MockApplication', {
       runtime: lambda.Runtime.PYTHON_3_7,
       handler: 'redis_connect.lambda_handler',
-      code: new lambda.InlineCode(fs.readFileSync(path.join(__dirname, 'lambda/redis_connect.py'), { encoding: 'utf-8' })),
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/mock_app.zip')),
       layers: [redis_py_layer],
       role: mock_app_role,
       vpc: vpc,
@@ -172,7 +183,7 @@ export class RedisRbacStack extends cdk.Stack {
       environment: {
         redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
         redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
-        secret_arn: userOneSecret.secretArn
+        secret_arn: userOne.getSecret().secretArn
       }
     });
 
@@ -183,7 +194,7 @@ export class RedisRbacStack extends cdk.Stack {
     mock_app.node.addDependency(mock_app_redis_secret);
 
     mock_app_redis_secret.grantRead(mock_app);
-    userOneSecret.grantRead(mock_app_role)
+    userOne.getSecret().grantRead(mock_app_role)
 
 
 

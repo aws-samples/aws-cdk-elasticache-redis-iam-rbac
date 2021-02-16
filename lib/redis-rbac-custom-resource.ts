@@ -12,15 +12,13 @@ import { countResources } from '@aws-cdk/assert';
 
 
 export interface RedisRbacUserProps {
-  /**
-   * Message to echo
-   */
-  vpc: ec2.IVpc;
-  elastiCacheSecurityGroups: [ec2.SecurityGroup];
-  elastiCacheReplicationGroup: elasticache.CfnReplicationGroup;
+
+  // vpc: ec2.IVpc;
+  // elastiCacheSecurityGroups: [ec2.SecurityGroup];
+  // elastiCacheReplicationGroup: elasticache.CfnReplicationGroup;
   redisUserName: string;
   redisUserId: string;
-  redisGroupName: string;
+  accessString?: string;
 }
 
 
@@ -59,7 +57,7 @@ export class RedisRbacUser extends cdk.Construct {
     const user = new elasticache.CfnUser(this, 'redisuser', {
       engine: 'redis', //Mirus Todo: File a bug: docs say this has to be 'Redis' but 'redis' is the correct casing
       userName: props.redisUserName,
-      accessString: "off +get ~keys*", // Mirus Todo: File a bug: this is required even though the docs say that it isn't -- result is 500 internal error on service ElastiCache
+      accessString: props.accessString? props.accessString : "off +get ~keys*", // Mirus Todo: File a bug: this is required even though the docs say that it isn't -- result is 500 internal error on service ElastiCache
       userId: props.redisUserId,
       passwords: [this.rbacUserSecret.secretValue.toString()]
     })
