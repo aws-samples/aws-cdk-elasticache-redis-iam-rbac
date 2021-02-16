@@ -12,10 +12,6 @@ import { countResources } from '@aws-cdk/assert';
 
 
 export interface RedisRbacUserProps {
-
-  // vpc: ec2.IVpc;
-  // elastiCacheSecurityGroups: [ec2.SecurityGroup];
-  // elastiCacheReplicationGroup: elasticache.CfnReplicationGroup;
   redisUserName: string;
   redisUserId: string;
   accessString?: string;
