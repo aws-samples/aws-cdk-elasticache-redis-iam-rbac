@@ -5,7 +5,7 @@ import elasticache = require('@aws-cdk/aws-elasticache');
 import lambda = require('@aws-cdk/aws-lambda');
 import path = require('path');
 import secretsmanager = require('@aws-cdk/aws-secretsmanager')
-import { RedisRbacUser } from  "./redis-rbac-custom-resource"
+import { RedisRbacUser } from  "./redis-rbac-secret-manager"
 
 import fs = require('fs');
 
