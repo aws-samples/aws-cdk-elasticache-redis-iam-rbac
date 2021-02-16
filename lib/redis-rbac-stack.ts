@@ -17,13 +17,7 @@ export class RedisRbacStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const redis_admin = new iam.User(this, "RedisAdmin", {
-      userName: 'RedisAdmin',
-    });
 
-    const redis_readers = new iam.Group(this, "RedisReaders", {
-      groupName: 'RedisReaders'
-    });
 
     //------------------------------
     // Configure VPC and Networking
@@ -60,27 +54,12 @@ export class RedisRbacStack extends cdk.Stack {
 
     ecSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(6379), 'Redis ingress 6379')
 
-    const publicEcSecurityGroup = new ec2.SecurityGroup(this, 'PublicElastiCacheSG', {
-      vpc: vpc,
-      description: 'PUBLIC SecurityGroup associated with the ElastiCache Redis Cluster'
-    });
-    ecSecurityGroup.addIngressRule(ec2.Peer.ipv4('205.251.233.182/32'), ec2.Port.tcp(6379), 'Public Redis ingress 6379')
-
     let privateSubnets: string[] = []
     vpc.privateSubnets.forEach(function(value){
       privateSubnets.push(value.subnetId)
     });
 
-    //------------------------------
-    // Create a RedisRBACUser
-    //------------------------------
-    // Order of execution:
-    // 1) Create an AWS IAM user, role or group which will access the redis cluster
-    // 2) Create an AWS SecretsManager secret which will be the auto generated secret string
-    //    a) input parameters: redis-username, group
-    // 3) Create custom resource to create a Redis RBAC user/group using username, password from step 2
-    //    a) input parameters: redis-username, user-group name, cluster-name
-    //    b) custom resource will access secret for redis-username and create RBAC user and assign to user-group and cluster
+    // Create a RedisRBACUsers
     const userOne = new RedisRbacUser(this, "testuser1", {
       redisUserName: 'userone',
       redisUserId: 'userone',
@@ -102,6 +81,7 @@ export class RedisRbacStack extends cdk.Stack {
       redisUserId: 'mock-app-default-user'
     });
 
+    // Create RBAC user group
     const mockAppUserGroup = new elasticache.CfnUserGroup(this, 'mockAppUserGroup', {
       engine: 'redis',
       userGroupId: 'mock-app-user-group',
@@ -113,9 +93,7 @@ export class RedisRbacStack extends cdk.Stack {
     mockAppUserGroup.node.addDependency(mockAppDefaultUser);
     mockAppUserGroup.node.addDependency(readOnlyUser);
 
-    //------------------------------
     // Configure ElastiCache Redis Cluster
-    //------------------------------
     const ecSubnetGroup = new elasticache.CfnSubnetGroup(this, 'ElastiCacheSubnetGroup', {
       description: 'Elasticache Subnet Group',
       subnetIds: privateSubnets,
@@ -140,9 +118,8 @@ export class RedisRbacStack extends cdk.Stack {
 
     ecClusterReplicationGroup.node.addDependency(ecSubnetGroup)
     ecClusterReplicationGroup.node.addDependency(mockAppUserGroup)
-    //------------------------------
+
     // Configure Mock Application
-    //------------------------------
 
     // Create a lambda layer for redis python library
     const redis_py_layer = new lambda.LayerVersion(this, 'redispy_Layer', {
@@ -162,6 +139,8 @@ export class RedisRbacStack extends cdk.Stack {
 
     mock_app_role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
     mock_app_role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+
+    // Allow the role read access to the secret used to access Redis
     userOne.getSecret().grantRead(mock_app_role)
 
     const mock_app = new lambda.Function(this, 'MockApplication', {
@@ -185,9 +164,7 @@ export class RedisRbacStack extends cdk.Stack {
     mock_app.node.addDependency(vpc);
     mock_app.node.addDependency(mock_app_role);
 
-    //--------------------
     // Create a function that has a role that cannot access the secret
-    //--------------------
 
     // Create a role for the Lambda
     const applicationTwoRole = new iam.Role(this, 'applicationTwoRole', {

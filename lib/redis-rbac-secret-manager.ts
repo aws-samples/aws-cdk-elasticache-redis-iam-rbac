@@ -62,7 +62,6 @@ export class RedisRbacUser extends cdk.Construct {
       passwords: [this.rbacUserSecret.secretValueFromJson('password').toString()]
     })
 
-
     user.node.addDependency(this.rbacUserSecret)
 
   }
