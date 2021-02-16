@@ -19,6 +19,7 @@ export interface RedisRbacUserProps {
   elastiCacheSecurityGroups: [ec2.SecurityGroup];
   elastiCacheReplicationGroup: elasticache.CfnReplicationGroup;
   redisUserName: string;
+  redisUserId: string;
   redisGroupName: string;
 }
 
@@ -37,7 +38,7 @@ export class RedisRbacUser extends cdk.Construct {
     rbacCustomResourceRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
     rbacCustomResourceRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
 
-    const rbacUserSecret = new secretsmanager.Secret(this, `${props.redisUserName}_secret`, {
+    const rbacUserSecret = new secretsmanager.Secret(this, 'secret', {
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: props.redisUserName }),
         generateStringKey: 'password',
@@ -46,9 +47,17 @@ export class RedisRbacUser extends cdk.Construct {
     });
 
     rbacUserSecret.grantRead(rbacCustomResourceRole)
+    console.log(rbacUserSecret.secretValue.toString())
+    const user = new elasticache.CfnUser(this, 'redisuser', {
+      engine: 'redis', //Mirus Todo: docs say this has to be 'Redis' but 'redis' is the correct casing
+      userName: props.redisUserName,
+      userId: props.redisUserId,
+      noPasswordRequired: true
+      // passwords: [rbacUserSecret.secretValue.toString()]
+    })
 
     const onEvent = new lambda.Function(this, 'onEventHandler', {
-      functionName: `rbac-custom-resource-${props.redisUserName}`,
+      functionName: 'rbac-custom-resource',
       runtime: lambda.Runtime.PYTHON_3_7,
       handler: 'custom_resource_handler.lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/rbac_cr.zip')),
@@ -66,12 +75,12 @@ export class RedisRbacUser extends cdk.Construct {
       }
     });
 
-    const rbacUserProvider = new customResource.Provider(this, "RbacUserProvider", {
-      onEventHandler: onEvent
-    });
+    // const rbacUserProvider = new customResource.Provider(this, "RbacUserProvider", {
+    //   onEventHandler: onEvent
+    // });
 
-    new cdk.CustomResource(this, props.redisUserName, {
-      serviceToken: rbacUserProvider.serviceToken
-    })
+    // new cdk.CustomResource(this, props.redisUserName, {
+    //   serviceToken: rbacUserProvider.serviceToken
+    // })
   }
 }

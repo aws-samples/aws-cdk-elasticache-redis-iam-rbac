@@ -162,12 +162,13 @@ export class RedisRbacStack extends cdk.Stack {
     // 3) Create custom resource to create a Redis RBAC user/group using username, password from step 2
     //    a) input parameters: redis-username, user-group name, cluster-name
     //    b) custom resource will access secret for redis-username and create RBAC user and assign to user-group and cluster
-    const rbacCs = new RedisRbacUser(this, "User1", {
+    const userOne = new RedisRbacUser(this, "testuser1", {
       vpc: vpc,
       elastiCacheSecurityGroups: [ecSecurityGroup],
       elastiCacheReplicationGroup: ecClusterReplicationGroup,
-      redisUserName: 'test-user-1',
-      redisGroupName: 'user-group-001'
+      redisUserName: 'userone',
+      redisUserId: 'userone',
+      redisGroupName: 'groupone'
     });
 
   }
