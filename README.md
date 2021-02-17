@@ -1,11 +1,18 @@
-# Welcome to your CDK TypeScript project!
+# Managing ElastiCache Redis access with Redis RBAC, AWS SecretsManager and AWS IAM
 
-This is a blank project for TypeScript development with CDK.
+This project demonstrates how to manage access to ElastiCache Redis by storing Redis RBAC username and passwords in AWS Secrets Manager.  Granting or denying access to the secret will by proxy grant or deny access to Redis via RBAC.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+This project creates an ElastiCache Redis Replication group, IAM roles, Lambdas, Secrets and ElastiCache RBAC users and user groups.
+
+## How to build and deploy
+
+1. You may need to run `cdk bootstrap aws://<account_id>/<region>` to initialize the region to use CDK
+1. Build the zip files which contain lambda functions by calling `npm run-script zip`
+1. Deploy the project by calling `cdk deploy`
 
 ## Useful commands
 
+ * `npm run-script zip`   bundle lambda functions into zip files
  * `npm run build`   compile typescript to js
  * `npm run watch`   watch for changes and compile
  * `npm run test`    perform the jest unit tests
