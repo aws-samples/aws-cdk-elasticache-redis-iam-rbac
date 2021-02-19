@@ -30,7 +30,7 @@ export class RedisRbacStack extends cdk.Stack {
 
     let producerName = 'producer'
     let consumerName = 'consumer'
-    let noAccessName = 'noAccess'
+    let noAccessName = 'outsider'
     let defaultName = 'default'
 
     // ------------------------------------------------------------------------------------
@@ -207,7 +207,7 @@ export class RedisRbacStack extends cdk.Stack {
     // Create a function that can only read from Redis
     const consumerFunction = new lambda.Function(this, consumerName+'Fn', {
       runtime: lambda.Runtime.PYTHON_3_7,
-      handler: 'redis_connect.consumer_lambda_handler',
+      handler: 'redis_connect.producer_lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/mock_app.zip')),
       layers: [redisPyLayer],
       role: consumerRole,
@@ -229,7 +229,7 @@ export class RedisRbacStack extends cdk.Stack {
     // Create a function that cannot access Redis
     const noAccessFunction = new lambda.Function(this, noAccessName+'Fn', {
       runtime: lambda.Runtime.PYTHON_3_7,
-      handler: 'redis_connect.consumer_lambda_handler',
+      handler: 'redis_connect.producer_lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/mock_app.zip')),
       layers: [redisPyLayer],
       role: consumerRole,
