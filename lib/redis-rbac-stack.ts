@@ -17,34 +17,44 @@ export class RedisRbacStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // -----------------------------------------------------------------------------------------------------------
+    // This constructor will deploy resources required to link ElastiCache Redis, with SecretsManager and IAM
+    // -----------------------------------------------------------------------------------------------------------
+    // Steps:
+    // Step 1) create a VPC into which the ElastiCache replication group will be placed
+    // Step 2) create Redis RBAC users
+    //    a) one secret in Secrets Manager will be created for each
+    // Step 3) create IAM roles and grant them read access to the appropriate secret
+    // Step 4) create an ElastiCache Redis replication group
+    // Step 5) create test functions
 
+    let producerName = 'producer'
+    let consumerName = 'consumer'
+    let noAccessName = 'noAccess'
+    let defaultName = 'default'
 
-    //------------------------------
-    // Configure VPC and Networking
-    //------------------------------
+    // ------------------------------------------------------------------------------------
+    // Step 1) Create a VPC into which the ElastiCache replication group will be placed
+    //     a) only private subnets will be used
+    //     b) a Secrets Manager VPC endpoint will be added to allow access to Secrets Manager
+    // ------------------------------------------------------------------------------------
+
     const vpc = new ec2.Vpc(this, "Vpc", {
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE,
-        },
-        {
-          cidrMask: 24,
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
+          name: 'Isolated',
+          subnetType: ec2.SubnetType.ISOLATED,
         }
       ]
     });
 
-
     const secretsManagerEndpoint = vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
       subnets: {
-        subnetType: ec2.SubnetType.PRIVATE
+        subnetType: ec2.SubnetType.ISOLATED
       }
     });
-
     secretsManagerEndpoint.connections.allowDefaultPortFromAnyIpv4();
 
     const ecSecurityGroup = new ec2.SecurityGroup(this, 'ElastiCacheSG', {
@@ -54,49 +64,88 @@ export class RedisRbacStack extends cdk.Stack {
 
     ecSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(6379), 'Redis ingress 6379')
 
-    let privateSubnets: string[] = []
-    vpc.privateSubnets.forEach(function(value){
-      privateSubnets.push(value.subnetId)
-    });
-
-    // Create a RedisRBACUsers
-    const userOne = new RedisRbacUser(this, "testuser1", {
-      redisUserName: 'userone',
-      redisUserId: 'userone',
+    // ------------------------------------------------------------------------------------
+    // Step 2) Create Redis RBAC users
+    //     a) access strings will dictate operations that can be performed
+    //     b) RedisRbacUser is a class defined in redis-rbac-secret-manager.ts
+    //     c) RedisRbacUser is composed of an AWS::ElastiCache::User and a Secret
+    // ------------------------------------------------------------------------------------
+    const producerRbacUser = new RedisRbacUser(this, producerName+'RBAC', {
+      redisUserName: producerName,
+      redisUserId: producerName,
       accessString: 'on ~* +@all'
     });
 
-    const userTwo = new RedisRbacUser(this, "userTwo", {
-      redisUserName: 'usertwo',
-      redisUserId: 'user2'
+    const consumerRbacUser = new RedisRbacUser(this, consumerName+'RBAC', {
+      redisUserName: 'consumer',
+      redisUserId: 'consumer',
+      accessString: 'on ~* -@all +GET'
     });
 
-    const readOnlyUser = new RedisRbacUser(this, "readOnlyUser", {
-      redisUserName: 'reader',
-      redisUserId: 'readonly'
-    });
-
-    const mockAppDefaultUser = new RedisRbacUser(this, "mockAppDefaultUser", {
+    const groupDefaultRbacUser = new RedisRbacUser(this, "groupDefaultUser"+'RBAC', {
       redisUserName: 'default',
-      redisUserId: 'mock-app-default-user'
+      redisUserId: 'groupdefaultuser'
     });
 
     // Create RBAC user group
     const mockAppUserGroup = new elasticache.CfnUserGroup(this, 'mockAppUserGroup', {
       engine: 'redis',
       userGroupId: 'mock-app-user-group',
-      userIds: [userOne.getUserId(), userTwo.getUserId(), mockAppDefaultUser.getUserId(), readOnlyUser.getUserId()]
+      userIds: [producerRbacUser.getUserId(), groupDefaultRbacUser.getUserId(), consumerRbacUser.getUserId()]
     })
 
-    mockAppUserGroup.node.addDependency(userOne);
-    mockAppUserGroup.node.addDependency(userTwo);
-    mockAppUserGroup.node.addDependency(mockAppDefaultUser);
-    mockAppUserGroup.node.addDependency(readOnlyUser);
+    mockAppUserGroup.node.addDependency(producerRbacUser);
+    mockAppUserGroup.node.addDependency(groupDefaultRbacUser);
+    mockAppUserGroup.node.addDependency(consumerRbacUser);
 
-    // Configure ElastiCache Redis Cluster
+
+    // ------------------------------------------------------------------------------------
+    // Step 3) Create IAM role and grant them read access to the appropriate SecretsManager secret
+    //     a) each IAM role will be assumed by a lambda function
+    //     b) each IAM role will be granted read and decrypt permissions to a matching secret
+    // ------------------------------------------------------------------------------------
+    const producerRole = new iam.Role(this, producerName+'Role', {
+      roleName: producerName,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Role to be assumed by producer  lambda',
+    });
+
+    producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+    producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+    producerRbacUser.getSecret().grantRead(producerRole)
+
+    const consumerRole = new iam.Role(this, consumerName+'Role', {
+      roleName: consumerName,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Role to be assumed by mock application lambda',
+    });
+    consumerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+    consumerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+    consumerRbacUser.getSecret().grantRead(consumerRole)
+
+    const noAccessRole = new iam.Role(this, noAccessName+'Role', {
+      roleName: noAccessName,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Role to be assumed by mock application lambda',
+    });
+    noAccessRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+    noAccessRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+
+    // ------------------------------------------------------------------------------------
+    // Step 4) Create an ElastiCache Redis Replication group and associate the RBAC user group
+    //     a) an ElastiCache subnet group will be created
+    //     b) the ElastiCache replication group will be associated with the RBAC user group
+    // ------------------------------------------------------------------------------------
+
+    let isolatedSubnets: string[] = []
+
+    vpc.isolatedSubnets.forEach(function(value){
+      isolatedSubnets.push(value.subnetId)
+    });
+
     const ecSubnetGroup = new elasticache.CfnSubnetGroup(this, 'ElastiCacheSubnetGroup', {
       description: 'Elasticache Subnet Group',
-      subnetIds: privateSubnets,
+      subnetIds: isolatedSubnets,
       cacheSubnetGroupName: 'RedisSubnetGroup'
     });
 
@@ -119,10 +168,14 @@ export class RedisRbacStack extends cdk.Stack {
     ecClusterReplicationGroup.node.addDependency(ecSubnetGroup)
     ecClusterReplicationGroup.node.addDependency(mockAppUserGroup)
 
-    // Configure Mock Application
 
-    // Create a lambda layer for redis python library
-    const redis_py_layer = new lambda.LayerVersion(this, 'redispy_Layer', {
+    // ------------------------------------------------------------------------------------
+    // Step 5) Create test functions
+    //     a) one producer
+    //     b) one consumer
+    //     c) one that cannot access Redis
+    // ------------------------------------------------------------------------------------
+    const redisPyLayer = new lambda.LayerVersion(this, 'redispy_Layer', {
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/lib/redis_module/redis_py.zip')),
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_8, lambda.Runtime.PYTHON_3_7, lambda.Runtime.PYTHON_3_6],
       description: 'A layer that contains the redispy module',
@@ -130,72 +183,70 @@ export class RedisRbacStack extends cdk.Stack {
     });
 
 
-    // Create a role for the Lambda
-    const mock_app_role = new iam.Role(this, 'MockApplication-Role', {
-      roleName: 'MockApplicationLambdaRole',
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Role to be assumed by mock application lambda',
-    });
-
-    mock_app_role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
-    mock_app_role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
-
-    // Allow the role read access to the secret used to access Redis
-    userOne.getSecret().grantRead(mock_app_role)
-
-    const mock_app = new lambda.Function(this, 'MockApplication', {
+    const producerLambda = new lambda.Function(this, producerName+'Fn', {
       runtime: lambda.Runtime.PYTHON_3_7,
-      handler: 'redis_connect.lambda_handler',
+      handler: 'redis_connect.producer_lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/mock_app.zip')),
-      layers: [redis_py_layer],
-      role: mock_app_role,
+      layers: [redisPyLayer],
+      role: producerRole,
       vpc: vpc,
-      vpcSubnets: {subnetType: ec2.SubnetType.PRIVATE},
+      vpcSubnets: {subnetType: ec2.SubnetType.ISOLATED},
       securityGroups: [ecSecurityGroup],
       environment: {
         redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
         redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
-        secret_arn: userOne.getSecret().secretArn,
+        secret_arn: producerRbacUser.getSecret().secretArn,
       }
     });
 
-    mock_app.node.addDependency(redis_py_layer);
-    mock_app.node.addDependency(ecClusterReplicationGroup);
-    mock_app.node.addDependency(vpc);
-    mock_app.node.addDependency(mock_app_role);
+    producerLambda.node.addDependency(redisPyLayer);
+    producerLambda.node.addDependency(ecClusterReplicationGroup);
+    producerLambda.node.addDependency(vpc);
+    producerLambda.node.addDependency(producerRole);
 
-    // Create a function that has a role that cannot access the secret
-
-    // Create a role for the Lambda
-    const applicationTwoRole = new iam.Role(this, 'applicationTwoRole', {
-      roleName: 'applicationTwoRole',
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Role to be assumed by mock application lambda',
-    });
-
-    applicationTwoRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
-    applicationTwoRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
-
-    const applicationTwo = new lambda.Function(this, 'applicationTwo', {
+    // Create a function that can only read from Redis
+    const consumerFunction = new lambda.Function(this, consumerName+'Fn', {
       runtime: lambda.Runtime.PYTHON_3_7,
-      handler: 'redis_connect.lambda_handler',
+      handler: 'redis_connect.consumer_lambda_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/mock_app.zip')),
-      layers: [redis_py_layer],
-      role: applicationTwoRole,
+      layers: [redisPyLayer],
+      role: consumerRole,
       vpc: vpc,
-      vpcSubnets: {subnetType: ec2.SubnetType.PRIVATE},
+      vpcSubnets: {subnetType: ec2.SubnetType.ISOLATED},
       securityGroups: [ecSecurityGroup],
       environment: {
         redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
         redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
-        secret_arn: userOne.getSecret().secretArn,
+        secret_arn: consumerRbacUser.getSecret().secretArn,
       }
     });
 
-    applicationTwo.node.addDependency(redis_py_layer);
-    applicationTwo.node.addDependency(ecClusterReplicationGroup);
-    applicationTwo.node.addDependency(vpc);
-    applicationTwo.node.addDependency(applicationTwoRole);
+    consumerFunction.node.addDependency(redisPyLayer);
+    consumerFunction.node.addDependency(ecClusterReplicationGroup);
+    consumerFunction.node.addDependency(vpc);
+    consumerFunction.node.addDependency(consumerRole);
+
+    // Create a function that cannot access Redis
+    const noAccessFunction = new lambda.Function(this, noAccessName+'Fn', {
+      runtime: lambda.Runtime.PYTHON_3_7,
+      handler: 'redis_connect.consumer_lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda/mock_app.zip')),
+      layers: [redisPyLayer],
+      role: consumerRole,
+      vpc: vpc,
+      vpcSubnets: {subnetType: ec2.SubnetType.ISOLATED},
+      securityGroups: [ecSecurityGroup],
+      environment: {
+        redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
+        redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
+        secret_arn: producerRbacUser.getSecret().secretArn,
+      }
+    });
+
+    noAccessFunction.node.addDependency(redisPyLayer);
+    noAccessFunction.node.addDependency(ecClusterReplicationGroup);
+    noAccessFunction.node.addDependency(vpc);
+    noAccessFunction.node.addDependency(noAccessRole);
 
   }
 
