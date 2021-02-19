@@ -4,6 +4,10 @@ This project demonstrates how to manage access to ElastiCache Redis by storing R
 
 This project creates an ElastiCache Redis Replication group, IAM roles, Lambdas, Secrets and ElastiCache RBAC users and user groups.
 
+## Installing CDK
+
+This project uses the AWS Cloud Development Kit (CDK). You can find instructions on installing CDK [here](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html#getting_started_install)
+
 ## How to build and deploy
 
 1. You may need to run `cdk bootstrap aws://<account_id>/<region>` to initialize the region to use CDK
