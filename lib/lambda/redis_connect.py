@@ -19,8 +19,15 @@ def producer_lambda_handler(event, context):
         password=secret['password'],
         ssl=True)
 
-    redis_server.set("time", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-    result = redis_server.get("time")
+    try:
+      redis_server.set("time", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    except Exception as e:
+      print ("Exception trying to SET entry "+e)
+
+    try:
+      result = redis_server.get("time")
+    except Exception as e:
+      print ("Exception trying to GET entry "+e)
     print (result)
 
 def consumer_lambda_handler(event, context):
@@ -38,5 +45,8 @@ def consumer_lambda_handler(event, context):
         password=secret['password'],
         ssl=True)
 
-    result = redis_server.get("time")
+    try:
+      result = redis_server.get("time")
+    except Exception as e:
+      print ("Exception trying to GET entry "+e)
     print (result)
