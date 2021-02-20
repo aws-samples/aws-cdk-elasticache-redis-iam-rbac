@@ -39,6 +39,10 @@ export class RedisRbacUser extends cdk.Construct {
 
   constructor(scope: cdk.Construct, id: string, props: RedisRbacUserProps) {
     super(scope, id);
+
+    this.rbacUserId = props.redisUserId
+    this.rbacUserName = props.redisUserName
+
     this.rbacUserSecret = new secretsmanager.Secret(this, 'secret', {
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: props.redisUserName }),
@@ -47,8 +51,6 @@ export class RedisRbacUser extends cdk.Construct {
       },
     });
 
-    this.rbacUserId = props.redisUserId
-    this.rbacUserName = props.redisUserName
 
     const user = new elasticache.CfnUser(this, 'redisuser', {
       engine: 'redis', //Mirus Todo: File a bug: docs say this has to be 'Redis' but 'redis' is the correct casing

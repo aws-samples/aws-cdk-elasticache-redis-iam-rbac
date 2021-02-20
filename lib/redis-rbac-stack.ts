@@ -55,6 +55,7 @@ export class RedisRbacStack extends cdk.Stack {
         subnetType: ec2.SubnetType.ISOLATED
       }
     });
+
     secretsManagerEndpoint.connections.allowDefaultPortFromAnyIpv4();
 
     const ecSecurityGroup = new ec2.SecurityGroup(this, 'ElastiCacheSG', {
