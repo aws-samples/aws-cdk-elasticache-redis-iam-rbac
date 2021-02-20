@@ -22,12 +22,12 @@ def producer_lambda_handler(event, context):
     try:
       redis_server.set("time", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
     except Exception as e:
-      print ("Exception trying to SET entry "+e)
+      print ("Exception trying to SET entry "+str(e))
 
     try:
       result = redis_server.get("time")
     except Exception as e:
-      print ("Exception trying to GET entry "+e)
+      print ("Exception trying to GET entry "+str(e))
     print (result)
 
 def consumer_lambda_handler(event, context):
