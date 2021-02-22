@@ -1,4 +1,4 @@
-#https://www.npmjs.com/package/@aws-cdk/custom-resources
+
 def lambda_handler(event, context):
   print(event)
   request_type = event['RequestType']
