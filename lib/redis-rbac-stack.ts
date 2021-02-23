@@ -92,7 +92,7 @@ export class RedisRbacStack extends cdk.Stack {
     const producerRbacUser = new RedisRbacUser(this, producerName+'RBAC', {
       redisUserName: producerName,
       redisUserId: producerName,
-      accessString: 'on ~* +@all'
+      accessString: 'on ~* -@all +SET'
     });
 
     const consumerRbacUser = new RedisRbacUser(this, consumerName+'RBAC', {
@@ -131,7 +131,7 @@ export class RedisRbacStack extends cdk.Stack {
 
     producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
     producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
-    producerRbacUser.getSecret().grantRead(producerRole)
+    producerRbacUser.grantReadSecret(producerRole)
 
     const consumerRole = new iam.Role(this, consumerName+'Role', {
       roleName: consumerName,
@@ -140,7 +140,7 @@ export class RedisRbacStack extends cdk.Stack {
     });
     consumerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
     consumerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
-    consumerRbacUser.getSecret().grantRead(consumerRole)
+    consumerRbacUser.grantReadSecret(consumerRole)
 
     const noAccessRole = new iam.Role(this, noAccessName+'Role', {
       roleName: noAccessName,

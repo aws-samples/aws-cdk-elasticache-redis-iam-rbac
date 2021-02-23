@@ -6,6 +6,8 @@ node_modules
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+drawio/
+scripts/
 
 lib/lambda/lib/redis_module
 .DS_Store
