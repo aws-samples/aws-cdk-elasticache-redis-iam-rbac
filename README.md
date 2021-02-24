@@ -25,7 +25,3 @@ This project uses the AWS Cloud Development Kit (CDK). You can find instructions
 - `cdk deploy` deploy this stack to your default AWS account/region
 - `cdk diff` compare deployed stack with current state
 - `cdk synth` emits the synthesized CloudFormation template
-
-## License
-
-This library is licensed under the MIT-0 License. See the [LICENSE](/architecture.md) file.
