@@ -173,7 +173,7 @@ export class RedisRbacStack extends cdk.Stack {
       replicationGroupId: 'RedisReplicationGroup',
       atRestEncryptionEnabled: true,
       multiAzEnabled: true,
-      cacheNodeType: 'cache.m4.large',
+      cacheNodeType: 'cache.m6g.large',
       cacheSubnetGroupName: ecSubnetGroup.cacheSubnetGroupName,
       engine: "Redis",
       engineVersion: '6.x',
