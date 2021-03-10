@@ -75,16 +75,20 @@ export class RedisRbacStack extends cdk.Stack {
 
     const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSG', {
       vpc: vpc,
-      description: 'SecurityGroup into which Lambdas will be deployed'
+      description: 'SecurityGroup into which Lambdas will be deployed',
+      allowAllOutbound: false
     });
 
+    secretsManagerEndpoint.connections.allowFrom(lambdaSecurityGroup, ec2.Port.allTcp());
 
     const ecSecurityGroup = new ec2.SecurityGroup(this, 'ElastiCacheSG', {
       vpc: vpc,
-      description: 'SecurityGroup associated with the ElastiCache Redis Cluster'
+      description: 'SecurityGroup associated with the ElastiCache Redis Cluster',
+      allowAllOutbound: false
     });
 
-    ecSecurityGroup.addIngressRule(lambdaSecurityGroup, ec2.Port.tcp(6379), 'Redis ingress 6379');
+    ecSecurityGroup.connections.allowFrom(lambdaSecurityGroup, ec2.Port.tcp(6379), 'Redis ingress 6379');
+
 
     // ------------------------------------------------------------------------------------
     // Step 2) Create Redis RBAC users
@@ -186,7 +190,6 @@ export class RedisRbacStack extends cdk.Stack {
 
     ecClusterReplicationGroup.node.addDependency(ecSubnetGroup)
     ecClusterReplicationGroup.node.addDependency(mockAppUserGroup)
-
 
     // ------------------------------------------------------------------------------------
     // Step 5) Create test functions
