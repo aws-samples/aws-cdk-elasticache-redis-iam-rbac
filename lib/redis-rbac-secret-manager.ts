@@ -16,19 +16,17 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 import cdk = require('@aws-cdk/core');
-import ec2 = require('@aws-cdk/aws-ec2');
+import kms = require ('@aws-cdk/aws-kms');
 import iam = require('@aws-cdk/aws-iam');
 import elasticache = require('@aws-cdk/aws-elasticache');
-import lambda = require('@aws-cdk/aws-lambda');
-import path = require('path');
-import secretsmanager = require('@aws-cdk/aws-secretsmanager')
-import fs = require('fs');
+import secretsmanager = require('@aws-cdk/aws-secretsmanager');
 
 
 export interface RedisRbacUserProps {
   redisUserName: string;
   redisUserId: string;
   accessString?: string;
+  kmsKey?: kms.Key;
 }
 
 
@@ -39,17 +37,22 @@ export class RedisRbacUser extends cdk.Construct {
   private secretResourcePolicyStatement: iam.PolicyStatement;
   private rbacUserName: string;
   private rbacUserId: string;
+  private kmsKey: kms.Key;
 
   public getSecret(): secretsmanager.Secret {
-    return this.rbacUserSecret
+    return this.rbacUserSecret;
   }
 
   public getUserName(): string {
-    return this.rbacUserName
+    return this.rbacUserName;
   }
 
   public getUserId(): string{
-    return this.rbacUserId
+    return this.rbacUserId;
+  }
+
+  public getKmsKey(): kms.Key {
+    return this.kmsKey;
   }
 
   public grantReadSecret(principal: iam.IPrincipal){
@@ -66,7 +69,7 @@ export class RedisRbacUser extends cdk.Construct {
     } else {
       this.secretResourcePolicyStatement.addPrincipals(principal)
     }
-
+    this.kmsKey.grantDecrypt(principal);
     this.rbacUserSecret.grantRead(principal)
   }
 
@@ -76,12 +79,20 @@ export class RedisRbacUser extends cdk.Construct {
     this.rbacUserId = props.redisUserId
     this.rbacUserName = props.redisUserName
 
+    if (!props.kmsKey) {
+      this.kmsKey = new kms.Key(this, 'kmsForSecret', {
+        alias: 'redisRbacUser/'+this.rbacUserName,
+        enableKeyRotation: true
+      });
+    }
+
     this.rbacUserSecret = new secretsmanager.Secret(this, 'secret', {
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: props.redisUserName }),
         generateStringKey: 'password',
         excludeCharacters: '@%*()_+=`~{}|[]\\:";\'?,./'
       },
+      encryptionKey: this.kmsKey
     });
 
     const user = new elasticache.CfnUser(this, 'redisuser', {

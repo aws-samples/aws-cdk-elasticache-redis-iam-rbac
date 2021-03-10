@@ -22,8 +22,7 @@ import iam = require('@aws-cdk/aws-iam');
 import elasticache = require('@aws-cdk/aws-elasticache');
 import lambda = require('@aws-cdk/aws-lambda');
 import path = require('path');
-import secretsmanager = require('@aws-cdk/aws-secretsmanager')
-import { RedisRbacUser } from  "./redis-rbac-secret-manager"
+import { RedisRbacUser } from  "./redis-rbac-secret-manager";
 
 import fs = require('fs');
 
@@ -129,7 +128,7 @@ export class RedisRbacStack extends cdk.Stack {
     // ------------------------------------------------------------------------------------
     const producerRole = new iam.Role(this, producerName+'Role', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Role to be assumed by producer  lambda',
+      description: 'Role to be assumed by producer lambda',
     });
 
     producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
