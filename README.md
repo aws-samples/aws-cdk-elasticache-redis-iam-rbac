@@ -12,6 +12,7 @@ This project uses the AWS Cloud Development Kit (CDK). You can find instructions
 
 ## How to build and deploy
 
+1. Run `npm install` to install the node dependencies for the project
 1. You may need to run `cdk bootstrap aws://<account_id>/<region>` to initialize the region to use CDK
 1. Build the zip files which contain lambda functions by calling `npm run-script zip`
 1. Deploy the project by calling `cdk deploy`
