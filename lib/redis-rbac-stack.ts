@@ -74,14 +74,18 @@ export class RedisRbacStack extends cdk.Stack {
       }
     });
 
-    secretsManagerEndpoint.connections.allowDefaultPortFromAnyIpv4();
+    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSG', {
+      vpc: vpc,
+      description: 'SecurityGroup into which Lambdas will be deployed'
+    });
+
 
     const ecSecurityGroup = new ec2.SecurityGroup(this, 'ElastiCacheSG', {
       vpc: vpc,
       description: 'SecurityGroup associated with the ElastiCache Redis Cluster'
     });
 
-    ecSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(6379), 'Redis ingress 6379')
+    ecSecurityGroup.addIngressRule(lambdaSecurityGroup, ec2.Port.tcp(6379), 'Redis ingress 6379');
 
     // ------------------------------------------------------------------------------------
     // Step 2) Create Redis RBAC users
@@ -124,7 +128,6 @@ export class RedisRbacStack extends cdk.Stack {
     //     b) each IAM role will be granted read and decrypt permissions to a matching secret
     // ------------------------------------------------------------------------------------
     const producerRole = new iam.Role(this, producerName+'Role', {
-      roleName: producerName,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'Role to be assumed by producer  lambda',
     });
@@ -134,7 +137,6 @@ export class RedisRbacStack extends cdk.Stack {
     producerRbacUser.grantReadSecret(producerRole)
 
     const consumerRole = new iam.Role(this, consumerName+'Role', {
-      roleName: consumerName,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'Role to be assumed by mock application lambda',
     });
@@ -143,7 +145,6 @@ export class RedisRbacStack extends cdk.Stack {
     consumerRbacUser.grantReadSecret(consumerRole)
 
     const noAccessRole = new iam.Role(this, noAccessName+'Role', {
-      roleName: noAccessName,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'Role to be assumed by mock application lambda',
     });
@@ -210,7 +211,7 @@ export class RedisRbacStack extends cdk.Stack {
       role: producerRole,
       vpc: vpc,
       vpcSubnets: {subnetType: ec2.SubnetType.ISOLATED},
-      securityGroups: [ecSecurityGroup],
+      securityGroups: [lambdaSecurityGroup],
       environment: {
         redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
         redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
@@ -232,7 +233,7 @@ export class RedisRbacStack extends cdk.Stack {
       role: consumerRole,
       vpc: vpc,
       vpcSubnets: {subnetType: ec2.SubnetType.ISOLATED},
-      securityGroups: [ecSecurityGroup],
+      securityGroups: [lambdaSecurityGroup],
       environment: {
         redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
         redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
@@ -254,7 +255,7 @@ export class RedisRbacStack extends cdk.Stack {
       role: consumerRole,
       vpc: vpc,
       vpcSubnets: {subnetType: ec2.SubnetType.ISOLATED},
-      securityGroups: [ecSecurityGroup],
+      securityGroups: [lambdaSecurityGroup],
       environment: {
         redis_endpoint: ecClusterReplicationGroup.attrPrimaryEndPointAddress,
         redis_port: ecClusterReplicationGroup.attrPrimaryEndPointPort,
