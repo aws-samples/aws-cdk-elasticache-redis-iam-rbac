@@ -17,6 +17,7 @@
  */
 
 import cdk = require('@aws-cdk/core');
+import kms = require ('@aws-cdk/aws-kms');
 import ec2 = require('@aws-cdk/aws-ec2');
 import iam = require('@aws-cdk/aws-iam');
 import elasticache = require('@aws-cdk/aws-elasticache');
@@ -48,7 +49,7 @@ export class RedisRbacStack extends cdk.Stack {
     let producerName = 'producer'
     let consumerName = 'consumer'
     let noAccessName = 'outsider'
-    let defaultName = 'default'
+    let elasticacheReplicationGroupName = 'RedisReplicationGroup'
 
     // ------------------------------------------------------------------------------------
     // Step 1) Create a VPC into which the ElastiCache replication group will be placed
@@ -172,9 +173,16 @@ export class RedisRbacStack extends cdk.Stack {
       cacheSubnetGroupName: 'RedisSubnetGroup'
     });
 
-    const ecClusterReplicationGroup = new elasticache.CfnReplicationGroup(this, 'RedisReplicationGroup', {
+    const elastiCacheKmsKey = new kms.Key(this, 'kmsForSecret', {
+      alias: 'redisReplicationGroup/'+elasticacheReplicationGroupName,
+      enableKeyRotation: true
+    });
+
+    elastiCacheKmsKey.grantEncrypt(producerRole);
+    elastiCacheKmsKey.grantDecrypt(consumerRole);
+
+    const ecClusterReplicationGroup = new elasticache.CfnReplicationGroup(this, elasticacheReplicationGroupName, {
       replicationGroupDescription: 'RedisReplicationGroup-RBAC-Demo',
-      replicationGroupId: 'RedisReplicationGroup',
       atRestEncryptionEnabled: true,
       multiAzEnabled: true,
       cacheNodeType: 'cache.m6g.large',
@@ -182,6 +190,7 @@ export class RedisRbacStack extends cdk.Stack {
       engine: "Redis",
       engineVersion: '6.x',
       numNodeGroups: 1,
+      kmsKeyId: elastiCacheKmsKey.keyId,
       replicasPerNodeGroup: 1,
       securityGroupIds: [ecSecurityGroup.securityGroupId],
       transitEncryptionEnabled: true,
