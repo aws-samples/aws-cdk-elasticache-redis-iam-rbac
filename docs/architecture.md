@@ -52,7 +52,7 @@ The following will be deployed:
 * One Lambda layer which contains the redis-py Python module
 * Three Lambda functions: producerFn, consumerFn, outsiderFn
 
-![architecture diagram](img/architecture_diagram_no_flow.png)
+![architecture diagram](img/architecture_diagram_with_flow.png)
 
 A VPC is created for the purpose of hosting the ElastiCache replication group and the Lambda functions that will be used to demonstrate how to access ElastiCache.  The code snippet defines the VPC with an isolated subnet, which in CDK terms, is a private subnet with no routing to the Internet.  In order for resources in the isolated subnet to access Secrets Manager, a Secrets Manager VPC Interface Endpoint is added.
 
