@@ -90,28 +90,67 @@ export class RedisRbacStack extends cdk.Stack {
 
     ecSecurityGroup.connections.allowFrom(lambdaSecurityGroup, ec2.Port.tcp(6379), 'Redis ingress 6379');
 
+    // ------------------------------------------------------------------------------------
+    // Step 2) Create IAM roles
+    //     a) each IAM role will be assumed by a lambda function
+    //     b) each IAM role will be granted read and decrypt permissions to a matching secret
+    // ------------------------------------------------------------------------------------
+    const producerRole = new iam.Role(this, producerName+'Role', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Role to be assumed by producer lambda',
+    });
+
+    producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+    producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+
+
+    const consumerRole = new iam.Role(this, consumerName+'Role', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Role to be assumed by mock application lambda',
+    });
+    consumerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+    consumerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+
+
+    const noAccessRole = new iam.Role(this, noAccessName+'Role', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Role to be assumed by mock application lambda',
+    });
+    noAccessRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+    noAccessRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
+
 
     // ------------------------------------------------------------------------------------
-    // Step 2) Create Redis RBAC users
+    // Step 3) Create Redis RBAC users
     //     a) access strings will dictate operations that can be performed
     //     b) RedisRbacUser is a class defined in redis-rbac-secret-manager.ts
     //     c) RedisRbacUser is composed of an AWS::ElastiCache::User and a Secret
     // ------------------------------------------------------------------------------------
+    const commonKmsKey = new kms.Key(this, 'commonCredentialKey', {
+      alias: 'redisRbacUser/common',
+      enableKeyRotation: true
+    });
+
     const producerRbacUser = new RedisRbacUser(this, producerName+'RBAC', {
       redisUserName: producerName,
       redisUserId: producerName,
-      accessString: 'on ~* -@all +SET'
+      accessString: 'on ~* -@all +SET',
+      kmsKey: commonKmsKey,
+      principals: [producerRole]
     });
 
     const consumerRbacUser = new RedisRbacUser(this, consumerName+'RBAC', {
       redisUserName: 'consumer',
       redisUserId: 'consumer',
-      accessString: 'on ~* -@all +GET'
+      accessString: 'on ~* -@all +GET',
+      kmsKey: commonKmsKey,
+      principals: [consumerRole]
     });
 
     const groupDefaultRbacUser = new RedisRbacUser(this, "groupDefaultUser"+'RBAC', {
       redisUserName: 'default',
-      redisUserId: 'groupdefaultuser'
+      redisUserId: 'groupdefaultuser',
+      kmsKey: commonKmsKey
     });
 
     // Create RBAC user group
@@ -125,35 +164,6 @@ export class RedisRbacStack extends cdk.Stack {
     mockAppUserGroup.node.addDependency(groupDefaultRbacUser);
     mockAppUserGroup.node.addDependency(consumerRbacUser);
 
-
-    // ------------------------------------------------------------------------------------
-    // Step 3) Create IAM role and grant them read access to the appropriate SecretsManager secret
-    //     a) each IAM role will be assumed by a lambda function
-    //     b) each IAM role will be granted read and decrypt permissions to a matching secret
-    // ------------------------------------------------------------------------------------
-    const producerRole = new iam.Role(this, producerName+'Role', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Role to be assumed by producer lambda',
-    });
-
-    producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
-    producerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
-    producerRbacUser.grantReadSecret(producerRole)
-
-    const consumerRole = new iam.Role(this, consumerName+'Role', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Role to be assumed by mock application lambda',
-    });
-    consumerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
-    consumerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
-    consumerRbacUser.grantReadSecret(consumerRole)
-
-    const noAccessRole = new iam.Role(this, noAccessName+'Role', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Role to be assumed by mock application lambda',
-    });
-    noAccessRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
-    noAccessRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"));
 
     // ------------------------------------------------------------------------------------
     // Step 4) Create an ElastiCache Redis Replication group and associate the RBAC user group
@@ -178,8 +188,8 @@ export class RedisRbacStack extends cdk.Stack {
       enableKeyRotation: true
     });
 
-    elastiCacheKmsKey.grantEncrypt(producerRole);
-    elastiCacheKmsKey.grantDecrypt(consumerRole);
+    // elastiCacheKmsKey.grantEncrypt(producerRole);
+    // elastiCacheKmsKey.grantDecrypt(consumerRole);
 
     const ecClusterReplicationGroup = new elasticache.CfnReplicationGroup(this, elasticacheReplicationGroupName, {
       replicationGroupDescription: 'RedisReplicationGroup-RBAC-Demo',

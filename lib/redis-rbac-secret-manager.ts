@@ -27,6 +27,7 @@ export interface RedisRbacUserProps {
   redisUserId: string;
   accessString?: string;
   kmsKey?: kms.Key;
+  principals?: iam.IPrincipal[]
 }
 
 
@@ -84,6 +85,8 @@ export class RedisRbacUser extends cdk.Construct {
         alias: 'redisRbacUser/'+this.rbacUserName,
         enableKeyRotation: true
       });
+    } else {
+      this.kmsKey = props.kmsKey;
     }
 
     this.rbacUserSecret = new secretsmanager.Secret(this, 'secret', {
@@ -104,6 +107,12 @@ export class RedisRbacUser extends cdk.Construct {
     })
 
     user.node.addDependency(this.rbacUserSecret)
+
+    if(props.principals){
+      props.principals.forEach( (item) => {
+          this.grantReadSecret(item)
+      });
+    }
 
   }
 
