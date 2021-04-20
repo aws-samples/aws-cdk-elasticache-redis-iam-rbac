@@ -67,6 +67,10 @@ export class RedisRbacStack extends cdk.Stack {
       ]
     });
 
+    const flowLog = new ec2.FlowLog(this, 'VpcFlowLog', {
+      resourceType: ec2.FlowLogResourceType.fromVpc(vpc)
+    })
+
     const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSG', {
       vpc: vpc,
       description: 'SecurityGroup into which Lambdas will be deployed',
