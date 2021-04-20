@@ -67,28 +67,38 @@ export class RedisRbacStack extends cdk.Stack {
       ]
     });
 
-    const secretsManagerEndpoint = vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-      subnets: {
-        subnetType: ec2.SubnetType.ISOLATED
-      }
-    });
-
     const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSG', {
       vpc: vpc,
       description: 'SecurityGroup into which Lambdas will be deployed',
       allowAllOutbound: false
     });
 
-    secretsManagerEndpoint.connections.allowFrom(lambdaSecurityGroup, ec2.Port.allTcp());
+    const secretsManagerVpcEndpointSecurityGroup = new ec2.SecurityGroup(this, 'SecretsManagerVPCeSG', {
+      vpc: vpc,
+      description: 'SecurityGroup for the VPC Endpoint Secrets Manager',
+      allowAllOutbound: false,
+
+    });
+
+    secretsManagerVpcEndpointSecurityGroup.connections.allowFrom(lambdaSecurityGroup, ec2.Port.tcp(443));
+
+    const secretsManagerEndpoint = vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+      subnets: {
+        subnetType: ec2.SubnetType.ISOLATED
+      },
+      open: false,
+      securityGroups: [secretsManagerVpcEndpointSecurityGroup]
+    });
 
     const ecSecurityGroup = new ec2.SecurityGroup(this, 'ElastiCacheSG', {
       vpc: vpc,
       description: 'SecurityGroup associated with the ElastiCache Redis Cluster',
-      allowAllOutbound: false
+      allowAllOutbound: false,
     });
 
     ecSecurityGroup.connections.allowFrom(lambdaSecurityGroup, ec2.Port.tcp(6379), 'Redis ingress 6379');
+    ecSecurityGroup.connections.allowTo(lambdaSecurityGroup, ec2.Port.tcp(6379), 'Redis egress 6379');
 
     // ------------------------------------------------------------------------------------
     // Step 2) Create IAM roles
