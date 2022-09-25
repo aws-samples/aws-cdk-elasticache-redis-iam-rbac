@@ -63,7 +63,7 @@ const vpc = new ec2.Vpc(this, "Vpc", {
         {
           cidrMask: 24,
           name: 'Isolated',
-          subnetType: ec2.SubnetType.ISOLATED,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         }
       ]
     });
@@ -71,7 +71,7 @@ const vpc = new ec2.Vpc(this, "Vpc", {
     const secretsManagerEndpoint = vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
       subnets: {
-        subnetType: ec2.SubnetType.ISOLATED
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED
       }
     });
 
@@ -80,6 +80,8 @@ secretsManagerEndpoint.connections.allowDefaultPortFromAnyIpv4();
 ```
 
 To modularize the design of the solution, a RedisRbacUser class is also created.  This class is composed of two CDK resources: a Secrets Manager Secret and an ElastiCache CfnUser; these resources are explicitly grouped together since the Secret stores the CfnUser password, and as will be shown later, read and decrypt permissions to the Secret will be granted to an IAM user.
+
+A note about unsafeUnwrap(); this method was added to the Secrets Manager library in CDK version 2 and is used in place of toString() to explicitly force the developer to understand the consequences of decoded secrets in code. For details, please see the documentation for [unsafeUnwrap()](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.SecretValue.html#unsafewbrunwrap) in the CDK API documentation.
 
 ```
 export class RedisRbacUser extends cdk.Construct {
@@ -103,7 +105,7 @@ export class RedisRbacUser extends cdk.Construct {
       userName: props.redisUserName,
       accessString: props.accessString? props.accessString : "off +get ~keys*",
       userId: props.redisUserId,
-      passwords: [this.rbacUserSecret.secretValueFromJson('password').toString()]
+      passwords: [this.rbacUserSecret.secretValueFromJson('password').unsafeUnwrap()]
     })
 
     ...

@@ -15,12 +15,14 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-import cdk = require('@aws-cdk/core');
-import kms = require ('@aws-cdk/aws-kms');
-import iam = require('@aws-cdk/aws-iam');
-import elasticache = require('@aws-cdk/aws-elasticache');
-import secretsmanager = require('@aws-cdk/aws-secretsmanager');
 
+import * as cdk from 'aws-cdk-lib';
+import { 
+  aws_kms as kms, 
+  aws_iam as iam, 
+  aws_elasticache as elasticache, 
+  aws_secretsmanager as secretsmanager} from 'aws-cdk-lib';
+import { Construct } from 'constructs';
 
 export interface RedisRbacUserProps {
   redisUserName: string;
@@ -31,7 +33,7 @@ export interface RedisRbacUserProps {
 }
 
 
-export class RedisRbacUser extends cdk.Construct {
+export class RedisRbacUser extends Construct {
   public readonly response: string;
 
   private rbacUserSecret: secretsmanager.Secret;
@@ -74,7 +76,7 @@ export class RedisRbacUser extends cdk.Construct {
     this.rbacUserSecret.grantRead(principal)
   }
 
-  constructor(scope: cdk.Construct, id: string, props: RedisRbacUserProps) {
+  constructor(scope: Construct, id: string, props: RedisRbacUserProps) {
     super(scope, id);
 
     this.rbacUserId = props.redisUserId
@@ -103,7 +105,7 @@ export class RedisRbacUser extends cdk.Construct {
       userName: props.redisUserName,
       accessString: props.accessString? props.accessString : "off +get ~keys*",
       userId: props.redisUserId,
-      passwords: [this.rbacUserSecret.secretValueFromJson('password').toString()]
+      passwords: [this.rbacUserSecret.secretValueFromJson('password').unsafeUnwrap()]
     })
 
     user.node.addDependency(this.rbacUserSecret)

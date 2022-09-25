@@ -18,7 +18,7 @@
  */
 
 import 'source-map-support/register';
-import * as cdk from '@aws-cdk/core';
+import * as cdk from 'aws-cdk-lib';
 import { RedisRbacStack } from '../lib/redis-rbac-stack';
 
 const app = new cdk.App();
